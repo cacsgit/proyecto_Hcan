@@ -9,6 +9,8 @@
     .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: flex; gap: 15px; }
     .card img { width: 120px; height: 120px; object-fit: cover; border-radius: 6px; }
     .btn { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+    .status-msg { text-align: center; font-weight: bold; margin: 15px 0; color: #555; }
+    .error-msg { color: red; text-align: center; }
   </style>
 </head>
 <body>
@@ -33,34 +35,62 @@
     const pueblo = document.getElementById('pueblo').value;
     const fInicio = document.getElementById('fInicio').value;
     const fFin = document.getElementById('fFin').value;
+    const contenedor = document.getElementById('resultados');
     
-    if(!fInicio || !fFin) { alert("Selecciona las fechas."); return; }
+    if(!fInicio || !fFin) { 
+      alert("Por favor, selecciona las fechas de entrada y salida."); 
+      return; 
+    }
 
-    const res = await fetch(`${API_URL}?pueblo=${pueblo}&fechaInicio=${fInicio}&fechaFin=${fFin}`);
-    const hoteles = await res.json();
-    
-    hoteles.sort((a, b) => a.distanciaKM - b.distanciaKM);
+    // Feedback visual inmediato al hacer clic
+    contenedor.innerHTML = '<div class="status-msg">🔍 Consultando disponibilidad y distancias...</div>';
 
-    let html = "";
-    hoteles.forEach(h => {
-      const plazasTexto = h.plazasLibres.length > 0 ? h.plazasLibres.join(", ") : "Sin disponibilidad";
-      html += `
-        <div class="card">
-          <img src="${h.urlImagen}">
-          <div>
-            <h3>${h.hotel} (${h.distanciaKM} km)</h3>
-            <p>${h.descripcion}</p>
-            <p><strong>Precio:</strong> ${h.precioNoche}€ / noche</p>
-            <p><strong>Plazas Libres:</strong> ${plazasTexto}</p>
-            ${h.plazasLibres.length > 0 ? `<button class="btn" onclick="reservar('${h.hotel}', '${h.plazasLibres[0]}', '${h.precioNoche}', '${h.enlaceStripe}')">Reservar Plaza</button>` : ''}
-          </div>
-        </div>`;
-    });
-    document.getElementById('resultados').innerHTML = html;
+    try {
+      const res = await fetch(`${API_URL}?pueblo=${encodeURIComponent(pueblo)}&fechaInicio=${fInicio}&fechaFin=${fFin}`);
+      
+      if (!res.ok) throw new Error("Error en la respuesta del servidor");
+      
+      const hoteles = await res.json();
+      
+      if (!Array.isArray(hoteles) || hoteles.length === 0) {
+        contenedor.innerHTML = '<div class="status-msg">No se encontraron hoteles disponibles.</div>';
+        return;
+      }
+
+      // Ordenar protegiendo valores "N/A" o no numéricos
+      hoteles.sort((a, b) => {
+        const distA = typeof a.distanciaKM === 'number' ? a.distanciaKM : 9999;
+        const distB = typeof b.distanciaKM === 'number' ? b.distanciaKM : 9999;
+        return distA - distB;
+      });
+
+      let html = "";
+      hoteles.forEach(h => {
+        const distTexto = typeof h.distanciaKM === 'number' ? `${h.distanciaKM} km` : 'Distancia N/D';
+        const plazasTexto = (h.plazasLibres && h.plazasLibres.length > 0) ? h.plazasLibres.join(", ") : "Sin disponibilidad";
+        
+        html += `
+          <div class="card">
+            <img src="${h.urlImagen || 'https://via.placeholder.com/120'}" alt="${h.hotel}">
+            <div>
+              <h3>${h.hotel} (${distTexto})</h3>
+              <p>${h.descripcion}</p>
+              <p><strong>Precio:</strong> ${h.precioNoche}€ / noche</p>
+              <p><strong>Plazas Libres:</strong> ${plazasTexto}</p>
+              ${(h.plazasLibres && h.plazasLibres.length > 0) ? `<button class="btn" onclick="reservar('${h.hotel}', '${h.plazasLibres[0]}', '${h.precioNoche}', '${h.enlaceStripe}')">Reservar Plaza</button>` : ''}
+            </div>
+          </div>`;
+      });
+      contenedor.innerHTML = html;
+
+    } catch (error) {
+      console.error(error);
+      contenedor.innerHTML = `<div class="status-msg error-msg">❌ Error al conectar con el servidor. Revisa los permisos de Apps Script o inténtalo de nuevo.</div>`;
+    }
   }
 
   function reservar(hotel, plaza, precio, stripeUrl) {
-    const metodo = prompt("Selecciona pago: escribe 'tarjeta' o 'bizum'");
+    const metodo = prompt("Selecciona método de pago: escribe 'tarjeta' o 'bizum'");
     if(!metodo) return;
 
     const datos = {
