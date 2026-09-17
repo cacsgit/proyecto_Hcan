@@ -1,188 +1,88 @@
-// 1. MENÚ PERSONALIZADO EN GOOGLE SHEETS
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('🏨 Gestión Hoteles')
-    .addItem('Confirmar Reserva y Pago Seleccionado', 'confirmarReservaCliente')
-    .addToUi();
-}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reserva Hotel Canino</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f6f8; }
+    .search-box { background: white; padding: 20px; border-radius: 8px; max-width: 600px; margin: 0 auto 20px auto; }
+    .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: flex; gap: 15px; }
+    .card img { width: 120px; height: 120px; object-fit: cover; border-radius: 6px; }
+    .btn { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
 
-// 2. API LECTURA (doGet): Búsqueda de disponibilidad, distancias y fichas de hoteles
-function doGet(e) {
-  var pueblo = e.parameter.pueblo;
-  var fInicio = e.parameter.fechaInicio; // Formato "YYYY-MM-DD"
-  var fFin = e.parameter.fechaFin;       // Formato "YYYY-MM-DD"
+<div class="search-box">
+  <h2>Buscar Hotel Canino</h2>
+  <label>Pueblo / Ubicación:</label>
+  <input type="text" id="pueblo" value="Soto del Real" style="width:90%; margin-bottom:10px;"><br>
+  <label>Entrada:</label>
+  <input type="date" id="fInicio">
+  <label>Salida:</label>
+  <input type="date" id="fFin"><br><br>
+  <button class="btn" onclick="buscarHoteles()">Buscar Disponibilidad</button>
+</div>
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var hotelesSheet = ss.getSheetByName('Hoteles');
-  var hotelesData = hotelesSheet.getDataRange().getValues();
+<div id="resultados" style="max-width:600px; margin:0 auto;"></div>
 
-  var plazasTotales = ['P01', 'P02', 'P03']; // Definición de plazas fijas por hotel
-  var resultados = [];
+<script>
+  const API_URL = "https://script.google.com/macros/s/AKfyCbyHwYbbiMapyXQRGCm0bFutAgTAg3L-JnYgihn0sb6KVwyb8FGMh_LT3cc789qTauLTw/exec";
 
-  for (var i = 1; i < hotelesData.length; i++) {
-    var hotelNombre = hotelesData[i][0];
-    var direccionHotel = hotelesData[i][1];
-    var emailHotel = hotelesData[i][2];
-    var precioNoche = hotelesData[i][3];
-    var urlImagen = hotelesData[i][4];
-    var descripcion = hotelesData[i][5];
-    var enlaceStripe = hotelesData[i][6];
+  async function buscarHoteles() {
+    const pueblo = document.getElementById('pueblo').value;
+    const fInicio = document.getElementById('fInicio').value;
+    const fFin = document.getElementById('fFin').value;
+    
+    if(!fInicio || !fFin) { alert("Selecciona las fechas."); return; }
 
-    var sheetHotel = ss.getSheetByName(hotelNombre);
-    if (sheetHotel) {
-      var dataHotel = sheetHotel.getDataRange().getValues();
-      var plazasLibres = obtenerPlazasLibresPorSolapamiento(dataHotel, plazasTotales, fInicio, fFin);
-      var distanciaKM = obtenerDistanciaKm(pueblo, direccionHotel);
+    const res = await fetch(`${API_URL}?pueblo=${pueblo}&fechaInicio=${fInicio}&fechaFin=${fFin}`);
+    const hoteles = await res.json();
+    
+    hoteles.sort((a, b) => a.distanciaKM - b.distanciaKM);
 
-      resultados.push({
-        hotel: hotelNombre,
-        direccion: direccionHotel,
-        email: emailHotel,
-        precioNoche: precioNoche,
-        urlImagen: urlImagen,
-        descripcion: descripcion,
-        enlaceStripe: enlaceStripe,
-        distanciaKM: distanciaKM,
-        plazasLibres: plazasLibres
+    let html = "";
+    hoteles.forEach(h => {
+      const plazasTexto = h.plazasLibres.length > 0 ? h.plazasLibres.join(", ") : "Sin disponibilidad";
+      html += `
+        <div class="card">
+          <img src="${h.urlImagen}">
+          <div>
+            <h3>${h.hotel} (${h.distanciaKM} km)</h3>
+            <p>${h.descripcion}</p>
+            <p><strong>Precio:</strong> ${h.precioNoche}€ / noche</p>
+            <p><strong>Plazas Libres:</strong> ${plazasTexto}</p>
+            ${h.plazasLibres.length > 0 ? `<button class="btn" onclick="reservar('${h.hotel}', '${h.plazasLibres[0]}', '${h.precioNoche}', '${h.enlaceStripe}')">Reservar Plaza</button>` : ''}
+          </div>
+        </div>`;
+    });
+    document.getElementById('resultados').innerHTML = html;
+  }
+
+  function reservar(hotel, plaza, precio, stripeUrl) {
+    const metodo = prompt("Selecciona pago: escribe 'tarjeta' o 'bizum'");
+    if(!metodo) return;
+
+    const datos = {
+      hotel: hotel,
+      plaza: plaza,
+      nombre: "Usuario Prueba",
+      telefono: "600000000",
+      email: "cliente@prueba.com",
+      fechaInicio: document.getElementById('fInicio').value,
+      fechaFin: document.getElementById('fFin').value,
+      metodoPago: metodo.toLowerCase()
+    };
+
+    fetch(API_URL, { method: 'POST', body: JSON.stringify(datos) })
+      .then(() => {
+        if(metodo.toLowerCase() === 'tarjeta') {
+          window.location.href = stripeUrl;
+        } else {
+          alert("Reserva registrada en estado Pendiente. Sigue las instrucciones enviadas a tu email.");
+        }
       });
-    }
   }
-
-  return ContentService.createTextOutput(JSON.stringify(resultados))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// Auxiliar: Filtra las plazas que NO tienen reservas en conflicto con las fechas solicitadas
-function obtenerPlazasLibresPorSolapamiento(data, plazasTotales, fInicioReq, fFinReq) {
-  var plazasOcupadas = {};
-
-  for (var i = 1; i < data.length; i++) {
-    var plaza = data[i][0];
-    var fInicioRes = formatDate(data[i][4]);
-    var fFinRes = formatDate(data[i][5]);
-    var estado = data[i][8];
-
-    // Regla de solapamiento: Hay conflicto si la reserva existente cruza el periodo solicitado
-    if ((estado === 'Ocupado' || estado === 'Pendiente') &&
-        (fInicioRes <= fFinReq && fFinRes >= fInicioReq)) {
-      plazasOcupadas[plaza] = true;
-    }
-  }
-
-  // Devuelve únicamente las plazas que no tienen ningún conflicto registrado
-  return plazasTotales.filter(function(plaza) {
-    return !plazasOcupadas[plaza];
-  });
-}
-
-// Auxiliar: Google Maps API
-function obtenerDistanciaKm(origenPueblo, destinoHotel) {
-  try {
-    var directions = Maps.newDirectionFinder()
-      .setOrigin(origenPueblo)
-      .setDestination(destinoHotel)
-      .setMode(Maps.DirectionFinder.Mode.DRIVING)
-      .getDirections();
-
-    if (directions.routes && directions.routes.length > 0) {
-      var metros = directions.routes[0].legs[0].distance.value;
-      return Math.round(metros / 1000);
-    }
-  } catch (e) {
-    Logger.log("Error consultando Google Maps API: " + e);
-  }
-  return "N/A";
-}
-
-// 3. API ESCRITURA (doPost): Registro inmediato de la reserva
-function doPost(e) {
-  var params = JSON.parse(e.postData.contents);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(params.hotel);
-
-  var esTarjeta = (params.metodoPago === 'tarjeta');
-  var estadoFinal = esTarjeta ? 'Ocupado' : 'Pendiente';
-  var estadoPagoInicial = esTarjeta ? 'Pagado_Stripe' : ('Pendiente_' + params.metodoPago.toUpperCase());
-
-  // Añadir la nueva reserva al final de la hoja [ID_Plaza, Nombre, Tel, Email, Inicio, Fin, Metodo, Estado_Pago, Estado]
-  sheet.appendRow([
-    params.plaza,
-    params.nombre,
-    params.telefono,
-    params.email,
-    params.fechaInicio,
-    params.fechaFin,
-    params.metodoPago,
-    estadoPagoInicial,
-    estadoFinal
-  ]);
-
-  // Obtener correo del hotel desde la pestaña 'Hoteles'
-  var hotelesSheet = ss.getSheetByName('Hoteles');
-  var hotelesData = hotelesSheet.getDataRange().getValues();
-  var emailHotel = "";
-  for (var j = 1; j < hotelesData.length; j++) {
-    if (hotelesData[j][0] === params.hotel) {
-      emailHotel = hotelesData[j][2];
-      break;
-    }
-  }
-
-  // Notificar al hotel por email
-  if (emailHotel) {
-    var asunto = "Solicitud de Reserva (" + params.metodoPago.toUpperCase() + ") - Plaza " + params.plaza;
-    var cuerpo = "Se ha recibido una solicitud de reserva:\n\n" +
-      "Hotel: " + params.hotel + "\n" +
-      "Plaza: " + params.plaza + "\n" +
-      "Periodo: " + params.fechaInicio + " al " + params.fechaFin + "\n" +
-      "Cliente: " + params.nombre + "\n" +
-      "Teléfono: " + params.telefono + "\n" +
-      "Email: " + params.email + "\n" +
-      "Método de Pago: " + params.metodoPago.toUpperCase() + "\n" +
-      "Estado Reserva: " + estadoFinal + "\n\n" +
-      (esTarjeta ? "El pago se completó por tarjeta." : "Verifica el pago en tu cuenta y confirma la reserva desde Google Sheets.");
-
-    MailApp.sendEmail(emailHotel, asunto, cuerpo);
-  }
-
-  return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS" }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// 4. CONFIRMACIÓN MANUAL DE RESERVAS PENDIENTES (Bizum / Transferencia)
-function confirmarReservaCliente() {
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var row = sheet.getActiveRange().getRow();
-
-  if (row <= 1) {
-    SpreadsheetApp.getUi().alert("Por favor, selecciona una fila que contenga una reserva.");
-    return;
-  }
-
-  var plaza = sheet.getRange(row, 1).getValue();
-  var cliente = sheet.getRange(row, 2).getValue();
-  var emailCliente = sheet.getRange(row, 4).getValue();
-  var fInicio = formatDate(sheet.getRange(row, 5).getValue());
-  var fFin = formatDate(sheet.getRange(row, 6).getValue());
-
-  if (!emailCliente) {
-    SpreadsheetApp.getUi().alert("Fila no válida o sin correo electrónico.");
-    return;
-  }
-
-  // Actualizar Estados en la hoja [Columna 8 = Estado_Pago, Columna 9 = Estado]
-  sheet.getRange(row, 8).setValue('Pagado_Verificado');
-  sheet.getRange(row, 9).setValue('Ocupado');
-
-  var asunto = "¡Reserva Confirmada! - " + sheet.getName();
-  var cuerpo = "Hola " + cliente + ",\n\nHemos verificado el pago de tu reserva para la plaza " + plaza +
-               " del " + fInicio + " al " + fFin + " en " + sheet.getName() + ".\n\n¡Tu estancia ha sido CONFIRMADA con éxito!";
-
-  MailApp.sendEmail(emailCliente, asunto, cuerpo);
-  SpreadsheetApp.getUi().alert("Reserva de " + cliente + " confirmada y notificación enviada.");
-}
-
-function formatDate(dateVal) {
-  var d = new Date(dateVal);
-  return Utilities.formatDate(d, SpreadsheetApp.getActive().getSpreadsheetTimeZone(), "yyyy-MM-dd");
-}
+</script>
+</body>
+</html>
