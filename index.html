@@ -29,7 +29,7 @@
 <div id="resultados" style="max-width:600px; margin:0 auto;"></div>
 
 <script>
-  const API_URL = "https://script.google.com/macros/s/AKfycbyHwYbbiMapyXQRGCm0bFutAgTAg3L-JynYgihn0sb6KVWyb8FGMh_LT3cc789qTaulTw/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfyCbyHwYbbiMapyXQRGCm0bFutAgTAg3L-JnYgihn0sb6KVwyb8FGMh_LT3cc789qTauLTw/exec";
 
   async function buscarHoteles() {
     const pueblo = document.getElementById('pueblo').value;
@@ -42,7 +42,6 @@
       return; 
     }
 
-    // Feedback visual inmediato al hacer clic
     contenedor.innerHTML = '<div class="status-msg">🔍 Consultando disponibilidad y distancias...</div>';
 
     try {
@@ -57,7 +56,6 @@
         return;
       }
 
-      // Ordenar protegiendo valores "N/A" o no numéricos
       hoteles.sort((a, b) => {
         const distA = typeof a.distanciaKM === 'number' ? a.distanciaKM : 9999;
         const distB = typeof b.distanciaKM === 'number' ? b.distanciaKM : 9999;
@@ -67,17 +65,17 @@
       let html = "";
       hoteles.forEach(h => {
         const distTexto = typeof h.distanciaKM === 'number' ? `${h.distanciaKM} km` : 'Distancia N/D';
-        const plazasTexto = (h.plazasLibres && h.plazasLibres.length > 0) ? h.plazasLibres.join(", ") : "Sin disponibilidad";
+        const tienePlazas = h.plazasLibres && h.plazasLibres.length > 0;
         
         html += `
           <div class="card">
             <img src="${h.urlImagen || 'https://via.placeholder.com/120'}" alt="${h.hotel}">
             <div>
               <h3>${h.hotel} (${distTexto})</h3>
+              <p><strong>Dirección:</strong> ${h.direccion || 'No disponible'}</p>
               <p>${h.descripcion}</p>
               <p><strong>Precio:</strong> ${h.precioNoche}€ / noche</p>
-              <p><strong>Plazas Libres:</strong> ${plazasTexto}</p>
-              ${(h.plazasLibres && h.plazasLibres.length > 0) ? `<button class="btn" onclick="reservar('${h.hotel}', '${h.plazasLibres[0]}', '${h.precioNoche}', '${h.enlaceStripe}')">Reservar Plaza</button>` : ''}
+              ${tienePlazas ? `<button class="btn" onclick="reservar('${h.hotel}', '${h.plazasLibres[0]}', '${h.precioNoche}', '${h.enlaceStripe}')">Reservar Plaza</button>` : '<p style="color:red; font-weight:bold;">Sin disponibilidad</p>'}
             </div>
           </div>`;
       });
